@@ -1,0 +1,3 @@
+An example of rdio-simple with Java and the Play! framework.
+
+To play with it put your credentials in app/ConsumerCredentials.java
