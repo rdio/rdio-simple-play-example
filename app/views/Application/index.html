@@ -1,4 +1,19 @@
 #{extends 'main.html' /}
 #{set title:'Home' /}
 
-#{welcome /}
+        #{if loggedIn}
+        <a href="@{Application.logout}">Log out of Rdio</a>
+
+        <p>${currentUser.get("firstName")}'s Playlists:</p>
+        <ul>
+            #{list playlists, as:"playlist"}
+                <li><a href="${playlist.get("shortUrl")}">${playlist.get("name")}</a></li>
+            #{/list}
+        </ul>
+
+        #{/if}
+        #{else}
+        <a href="@{Application.login}">Log in to Rdio</a>
+        #{/else}
+
+
