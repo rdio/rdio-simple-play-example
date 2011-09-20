@@ -1,20 +1,15 @@
 package controllers;
 
-import com.google.gson.JsonObject;
+import com.rdio.simple.ConsumerCredentials;
 import org.json.JSONArray;
 import org.json.JSONException;
-import play.*;
-import play.cache.Cache;
 import play.mvc.*;
 
 import java.io.IOException;
 import java.util.*;
 
-import models.*;
-
 import org.json.JSONObject;
 import com.rdio.simple.Rdio;
-import ConsumerCredentials;
 
 public class Application extends Controller {
     private static Rdio getRdio() {

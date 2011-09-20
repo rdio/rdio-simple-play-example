@@ -1,3 +1,5 @@
+package com.rdio.simple;
+
 public abstract class ConsumerCredentials {
   // you can get these by signing up for a developer account at:
   // http://developer.rdio.com/
