@@ -23,13 +23,14 @@ package com.rdio.simple;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.Iterator;
 
 /**
  * An ordered dictionary of String key/value pairs for holding OAuth parameters.
  */
+@SuppressWarnings("UnusedDeclaration")
 public class Parameters extends TreeMap<String, String> {
   private static final long serialVersionUID = 1L;
 
@@ -82,8 +83,8 @@ public class Parameters extends TreeMap<String, String> {
       return params;
     }
     String[] encoded_params = percentEncoded.split("&");
-    for (int i = 0; i < encoded_params.length; i++) {
-      String[] pair = encoded_params[i].split("=", 2);
+    for (String encoded_param : encoded_params) {
+      String[] pair = encoded_param.split("=", 2);
       if (pair.length == 2) {
         params.put(percentDecode(pair[0]), percentDecode(pair[1]));
       } else {
@@ -99,7 +100,7 @@ public class Parameters extends TreeMap<String, String> {
    */
   public String toPercentEncoded() {
     StringBuilder escaped = new StringBuilder();
-    Iterator<String> iter = navigableKeySet().iterator();
+    Iterator<String> iter = keySet().iterator();
     boolean first = true;
     while (iter.hasNext()) {
       if (!first) escaped.append('&');
@@ -119,7 +120,7 @@ public class Parameters extends TreeMap<String, String> {
    */
   public String toHeader() {
     StringBuilder header = new StringBuilder();
-    Iterator<String> iter = navigableKeySet().iterator();
+    Iterator<String> iter = keySet().iterator();
     boolean first = true;
     while (iter.hasNext()) {
       if (!first) header.append(", ");
@@ -194,7 +195,7 @@ public class Parameters extends TreeMap<String, String> {
    */
   public Parameters filter(Filter filter) {
     Parameters filtered = new Parameters();
-    for (String key : navigableKeySet()) {
+    for (String key : keySet()) {
       String value = get(key);
       if (filter.filter(key, value)) {
         filtered.put(key, value);

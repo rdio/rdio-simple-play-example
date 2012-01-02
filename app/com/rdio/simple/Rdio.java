@@ -28,45 +28,61 @@ import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 
+@SuppressWarnings("UnusedDeclaration")
 public class Rdio {
-  public String consumerKey;
-  public String consumerSecret;
-  public String token;
-  public String tokenSecret;
-
+  private final Consumer consumer;
+  private final Token accessToken;
+  
   /**
    * Create a new Rdio client object without a token.
-   * @param consumerKey    the OAuth consumer key
-   * @param consumerSecret the OAuth consumer secret
+   * @param consumer the OAuth consumer
    */
-  public Rdio(String consumerKey, String consumerSecret) {
-    this.consumerKey = consumerKey;
-    this.consumerSecret = consumerSecret;
+  public Rdio(Consumer consumer) {
+    this.consumer = consumer;
+    this.accessToken = null;
   }
 
   /**
    * Create a new Rdio client object with a token.
-   * @param consumerKey    the OAuth consumer key
-   * @param consumerSecret the OAuth consumer secret
-   * @param token          the OAuth token
-   * @param tokenSecret    the OAuth token secret
+   * @param consumer    the OAuth consumer
+   * @param accessToken the OAuth token
    */
-  public Rdio(String consumerKey, String consumerSecret, String token, String tokenSecret) {
-    this.consumerKey = consumerKey;
-    this.consumerSecret = consumerSecret;
-    this.token = token;
-    this.tokenSecret = tokenSecret;
+  public Rdio(Consumer consumer, Token accessToken) {
+    this.consumer = consumer;
+    this.accessToken = accessToken;
+  }
+
+  /**
+   * Get the consumer
+   * @return the consumer.
+   */
+  public Consumer getConsumer() {
+    return consumer;
+  }
+
+  /**
+   * Get the access token
+   * @return the access token.
+   */
+  public Token getAccessToken() {
+    return accessToken;
   }
 
   /**
    * Make an OAuth signed POST.
    * @param url          the URL to POST to
    * @param params       the parameters to post
+   * @param token        the token to sign the call with
    * @return             the response body
-   * @throws java.io.IOException in the event of any network errors
+   * @throws IOException in the event of any network errors
    */
-  private String signedPost(String url, Parameters params) throws IOException {
-    String auth = Om.sign(consumerKey, consumerSecret, url, params, token, tokenSecret, "POST", null);
+  private String signedPost(String url, Parameters params, Token token) throws IOException {
+    String auth;
+    if (token == null) {
+      auth = Om.sign(consumer.key, consumer.secret, url, params, null, null, "POST", null);
+    } else {
+      auth = Om.sign(consumer.key, consumer.secret, url, params, token.token, token.secret, "POST", null);
+    }
 
     try {
       HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
@@ -74,8 +90,10 @@ public class Rdio {
       connection.setRequestProperty("Authorization", auth);
       connection.setRequestProperty("Content-type", "application/x-www-form-urlencoded");
       connection.setDoOutput(true);
+      String postBody = params.toPercentEncoded();
+      connection = modifyConnection(connection, url, params);
       OutputStreamWriter writer = new OutputStreamWriter(connection.getOutputStream());
-      writer.write(params.toPercentEncoded());
+      writer.write(postBody);
       writer.close();
       InputStreamReader reader = new InputStreamReader(connection.getInputStream());
       int length = connection.getContentLength();
@@ -94,34 +112,47 @@ public class Rdio {
   }
 
   /**
+   * Modify the HttpURLConnection for a signedPost.
+   * The default implementation does nothing.
+   * @param connection the HttpURLConnection
+   * @param url the URL being requested
+   * @param params the parameters being passed
+   * @return the modified HttpURLConnection
+   */
+  @SuppressWarnings("UnusedParameters")
+  protected HttpURLConnection modifyConnection(HttpURLConnection connection, String url, Parameters params) {
+    return connection;
+  }
+
+  /**
    * Begin the authentication process. Fetch an OAuth request token associated with the supplied callback.
    * Store it on this Rdio object.
    * @param callback     the callback URL or "oob" for the PIN flow
-   * @return             the authorization URL to direct a user to
-   * @throws java.io.IOException in the event of any network errors
+   * @return             the request token and the authorization URL to direct a user to
+   * @throws IOException in the event of any network errors
    */
-  public String beginAuthentication(String callback) throws IOException {
+  public AuthState beginAuthentication(String callback) throws IOException {
     String response = signedPost("http://api.rdio.com/oauth/request_token",
-        Parameters.build("oauth_callback", callback));
+        Parameters.build("oauth_callback", callback), null);
     Parameters parsed = Parameters.fromPercentEncoded(response);
-    token = parsed.get("oauth_token");
-    tokenSecret = parsed.get("oauth_token_secret");
-
-    return parsed.get("login_url") + "?oauth_token=" + parsed.get("oauth_token");
+    Token requestToken = new Token(parsed.get("oauth_token"), parsed.get("oauth_token_secret"));
+    String url = parsed.get("login_url") + "?oauth_token=" + requestToken.token;
+    return new AuthState(requestToken, url);
   }
 
   /**
    * Complete the authentication process. This Rdio object should have the request token from the beginAuthentication
    * method. When the authentication is complete the access token will be stored on this Rdio object.
    * @param verifier     the oauth_verifier from the callback or the PIN displayed to the user
-   * @throws java.io.IOException in the event of any network errors
+   * @param requestToken the request token returned from the beginAuthentication call
+   * @throws IOException in the event of any network errors
+   * @return             the access token. pass it to an Rdio constructor to make authenticated calls
    */
-  public void completeAuthentication(String verifier) throws IOException {
+  public Token completeAuthentication(String verifier, Token requestToken) throws IOException {
     String response = signedPost("http://api.rdio.com/oauth/access_token",
-        Parameters.build("oauth_verifier", verifier));
+        Parameters.build("oauth_verifier", verifier), requestToken);
     Parameters parsed = Parameters.fromPercentEncoded(response);
-    token = parsed.get("oauth_token");
-    tokenSecret = parsed.get("oauth_token_secret");
+    return new Token(parsed.get("oauth_token"), parsed.get("oauth_token_secret"));
   }
 
   /**
@@ -129,21 +160,63 @@ public class Rdio {
    * @param method       the name of the method
    * @param parameters   the parameters of the method
    * @return             the response JSON text
-   * @throws java.io.IOException in the event of any network errors
+   * @throws IOException in the event of any network errors
    */
   public String call(String method, Parameters parameters) throws IOException {
     parameters = (Parameters)parameters.clone();
     parameters.put("method", method);
-    return signedPost("http://api.rdio.com/1/", parameters);
+    return signedPost("http://api.rdio.com/1/", parameters, accessToken);
   }
 
   /**
    * Make and Rdio API call with no parameters.
    * @param method       the name of the method
    * @return             the response JSON text
-   * @throws java.io.IOException in the event of any network errors
+   * @throws IOException in the event of any network errors
    */
   public String call(String method) throws IOException {
     return call(method, new Parameters());
   }
+
+
+  /**
+   * An OAuth Consumer key and secret pair.
+   */
+  public static class Consumer {
+    public final String key;
+    public final String secret;
+
+    public Consumer(String key, String secret) {
+      this.key = key;
+      this.secret = secret;
+    }
+  }
+
+
+  /**
+   * An OAuth token and token secret pair.
+   */
+  public static final class Token {
+    public final String token;
+    public final String secret;
+    
+    public Token(String token, String secret) {
+      this.token = token;
+      this.secret = secret;
+    }    
+  }
+
+
+  /**
+   * Intermediate state for OAuth authorization.
+   */
+  public static final class AuthState {
+    public final Token requestToken;
+    public final String url;
+    public AuthState(Token requestToken, String url) {
+      this.requestToken = requestToken;
+      this.url = url;
+    }
+  }
+
 }

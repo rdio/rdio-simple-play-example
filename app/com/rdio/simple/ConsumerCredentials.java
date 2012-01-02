@@ -1,14 +1,16 @@
 package com.rdio.simple;
 
 public abstract class ConsumerCredentials {
-  // you can get these by signing up for a developer account at:
-  // http://developer.rdio.com/
-  public static String RDIO_CONSUMER_KEY = "";
-  public static String RDIO_CONSUMER_SECRET = "";
-
+  public final static Rdio.Consumer consumer;
   static {
     // read the consumer key and secret from environment variables
-    ConsumerCredentials.RDIO_CONSUMER_KEY = System.getenv("RDIO_CONSUMER_KEY");
-    ConsumerCredentials.RDIO_CONSUMER_SECRET = System.getenv("RDIO_CONSUMER_SECRET");
+    String key = System.getenv("RDIO_CONSUMER_KEY");
+    String secret = System.getenv("RDIO_CONSUMER_SECRET");
+    if (key == null || secret == null) {
+      System.err.println("Missing RDIO_CONSUMER_KEY or RDIO_CONSUMER_SECRET");
+      consumer = null;
+    } else {
+      consumer = new Rdio.Consumer(key, secret);
+    }
   }
 }
