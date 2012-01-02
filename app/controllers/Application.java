@@ -58,7 +58,6 @@ public class Application extends Controller {
       Rdio.Token accessToken = rdio.completeAuthentication(oauth_verifier, requestToken);
       session.put("accessToken", accessToken.token);
       session.put("accessTokenSecret", accessToken.secret);
-
     }
     session.remove("requestToken", "requestTokenSecret");
     redirect(Router.getFullUrl("Application.index"));
