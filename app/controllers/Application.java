@@ -1,6 +1,7 @@
 package controllers;
 
-import com.rdio.simple.ConsumerCredentials;
+import com.rdio.simple.RdioClient;
+import com.rdio.simple.RdioCoreClient;
 import org.json.JSONArray;
 import org.json.JSONException;
 import play.mvc.*;
@@ -9,22 +10,24 @@ import java.io.IOException;
 import java.util.*;
 
 import org.json.JSONObject;
-import com.rdio.simple.Rdio;
 
 public class Application extends Controller {
-  private static Rdio getRdio() {
+  private static RdioClient getRdio() {
     String token = session.get("accessToken");
     String tokenSecret = session.get("accessTokenSecret");
+    
+    RdioClient.Consumer consumer = new RdioClient.Consumer(System.getenv("RDIO_CONSUMER_KEY"),
+            System.getenv("RDIO_CONSUMER_SECRET"));
 
     if (token != null && tokenSecret != null) {
-      return new Rdio(ConsumerCredentials.consumer, new Rdio.Token(token, tokenSecret));
+      return new RdioCoreClient(consumer, new RdioClient.Token(token, tokenSecret));
     } else {
-      return new Rdio(ConsumerCredentials.consumer);
+      return new RdioCoreClient(consumer);
     }
   }
   
   public static void index() throws java.io.IOException, JSONException {
-    Rdio rdio = getRdio();
+    RdioClient rdio = getRdio();
     JSONObject currentUser;
     List<JSONObject> playlists = new ArrayList<JSONObject>();
     boolean loggedIn;
@@ -35,7 +38,7 @@ public class Application extends Controller {
         playlists.add(playlist_array.getJSONObject(i));
       }
       loggedIn = true;
-    } catch(IOException e) {
+    } catch(Exception e) {
       currentUser = null;
       loggedIn = false;
     }
@@ -43,8 +46,14 @@ public class Application extends Controller {
   }
 
   public static void login() throws IOException {
-    Rdio rdio = getRdio();
-    Rdio.AuthState authState = rdio.beginAuthentication(Router.getFullUrl("Application.callback"));
+    RdioClient rdio = getRdio();
+    RdioClient.AuthState authState;
+    try {
+      authState = rdio.beginAuthentication(Router.getFullUrl("Application.callback"));
+    } catch (RdioClient.RdioException e) {
+      redirect(Router.getFullUrl("Application.logout"));
+      return;
+    }
     session.put("requestToken", authState.requestToken.token);
     session.put("requestTokenSecret", authState.requestToken.secret);
     session.remove("accessToken", "accessTokenSecret");
@@ -53,9 +62,16 @@ public class Application extends Controller {
 
   public static void callback(String oauth_verifier) throws IOException {
     if (oauth_verifier != null) {
-      Rdio rdio = getRdio();
-      Rdio.Token requestToken = new Rdio.Token(session.get("requestToken"), session.get("requestTokenSecret"));
-      Rdio.Token accessToken = rdio.completeAuthentication(oauth_verifier, requestToken);
+      RdioClient rdio = getRdio();
+      RdioClient.Token requestToken = new RdioClient.Token(session.get("requestToken"), session.get("requestTokenSecret"));
+      RdioClient.Token accessToken;
+      try {
+        accessToken = rdio.completeAuthentication(oauth_verifier, requestToken);
+      } catch (RdioClient.RdioException e) {
+        session.remove("requestToken", "requestTokenSecret");
+        redirect(Router.getFullUrl("Application.logout"));
+        return;
+      }
       session.put("accessToken", accessToken.token);
       session.put("accessTokenSecret", accessToken.secret);
     }
